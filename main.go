@@ -16,38 +16,52 @@ import (
 
 func main() {
 	// Define CLI flags
-	encodeFlag := flag.Bool("encode", false, "Encode a message into an image")
-	decodeFlag := flag.Bool("decode", false, "Decode a message from an image")
+	mode := flag.String("mode", "", "Mode: encode or decode")
 	inputFile := flag.String("inputFile", "", "Path to an input image file")
 	messageOutput := flag.String("messageOutput", "", "Path to the decoded message file")
 	outputFile := flag.String("outputFile", "", "Path to the output image file (this or output required for encoding)")
 	message := flag.String("message", "", "Message to encode (this or messageFile required for encoding)")
 	messageFile := flag.String("messageFile", "", "Message file to pull message from(this or message required for encoding)")
+	key := flag.String("key", "", "Encryption key (32 bytes for AES-256)")
 
 	flag.Parse()
 
 	// Basic error validation
-	if *encodeFlag && *decodeFlag {
-		fmt.Println("Error: Use either -encode or -decode, not both.")
-		os.Exit(1)
+	if *mode != "encode" && *mode != "decode" {
+		log.Fatal("Error: Invalid mode. use 'encode' or 'decode'.")
 	}
 
-	if *encodeFlag {
+	if *key != "" && len(*key) != 32 {
+		log.Fatal("Encryption key must be exactly 32 bytes.")
+	}
+
+	if *mode == "encode" {
 		if *inputFile == "" || *outputFile == "" {
-			fmt.Println("Error: -encode requires -input, -output.")
-			os.Exit(1)
+			log.Fatal("Error: 'encode' mode requires -input, -output.")
 		}
 
 		if *message == "" && *messageFile == "" {
-			fmt.Println("Error: -message or -messageFile is required.")
-			os.Exit(1)
+			log.Fatal("Error: -message or -messageFile is required.")
 		}
 
 		fmt.Println("encoding message...")
 		if *message != "" {
-			err := encodeMessage(*inputFile, *outputFile, *message)
-			if err != nil {
-				log.Fatal(err)
+			if *key != "" {
+				// Encrypt the message
+				encryptedMessage, err := EncryptMessage([]byte(*key), []byte(*message))
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				err = encodeMessage(*inputFile, *outputFile, encryptedMessage)
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				err := encodeMessage(*inputFile, *outputFile, *message)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 		} else {
 			// dealing with message file
@@ -63,14 +77,25 @@ func main() {
 				messageContent += scanner.Text() + "\n"
 			}
 
-			// log.Printf("File content: %s\n", messageContent)
-			if err = encodeMessage(*inputFile, *outputFile, messageContent); err != nil {
-				log.Fatal(err)
+			if *key != "" {
+				// Encrypt the message
+				encryptedMessage, err := EncryptMessage([]byte(*key), []byte(messageContent))
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				if err = encodeMessage(*inputFile, *outputFile, encryptedMessage); err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				if err = encodeMessage(*inputFile, *outputFile, messageContent); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
-	} else if *decodeFlag {
+	} else if *mode == "decode" {
 		if *inputFile == "" {
-			fmt.Println("Error: -decode requires -input.")
+			fmt.Println("Error: 'decode' mode requires -input.")
 			os.Exit(1)
 		}
 		fmt.Println("decoding message...")
@@ -79,27 +104,53 @@ func main() {
 			log.Fatal(err)
 		}
 
-		if *messageOutput == "" {
-			fmt.Println("Decoded message: ", message)
-		} else {
-			// output message contents in file
-			fh, err := os.Create(*messageOutput)
+		if *key != "" {
+			// Decrypt the message
+			decodedMessage, err := DecryptMessage([]byte(*key), message)
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer fh.Close()
 
-			writer := bufio.NewWriter(fh)
-			n, err := writer.WriteString(message)
-			if err != nil {
-				log.Fatal(err)
+			if *messageOutput == "" {
+				fmt.Println("Decoded message: ", decodedMessage)
+			} else {
+				// output message contents in file
+				fh, err := os.Create(*messageOutput)
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer fh.Close()
+
+				writer := bufio.NewWriter(fh)
+				n, err := writer.WriteString(decodedMessage)
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer writer.Flush()
+				log.Printf("Written %d bytes to disk.", n)
 			}
-			defer writer.Flush()
-			log.Printf("Written %d bytes to disk.", n)
+		} else {
+			if *messageOutput == "" {
+				fmt.Println("Decoded message: ", message)
+			} else {
+				// output message contents in file
+				fh, err := os.Create(*messageOutput)
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer fh.Close()
+
+				writer := bufio.NewWriter(fh)
+				n, err := writer.WriteString(message)
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer writer.Flush()
+				log.Printf("Written %d bytes to disk.", n)
+			}
 		}
 	} else {
-		fmt.Println("Error: specify either -encode or -decode.")
-		os.Exit(1)
+		log.Fatal("Error: specify mode as either 'encode' or 'decode'.")
 	}
 }
 
@@ -110,7 +161,7 @@ func encodeMessage(inputPath, outputPath, message string) error {
 	}
 	defer inputFile.Close()
 
-	// Deocode image into image.Image to access pixel data
+	// Decode image into image.Image to access pixel data
 	img, _, err := image.Decode(inputFile)
 	if err != nil {
 		return err

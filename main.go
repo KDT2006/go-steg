@@ -18,8 +18,9 @@ func main() {
 	// Define CLI flags
 	encodeFlag := flag.Bool("encode", false, "Encode a message into an image")
 	decodeFlag := flag.Bool("decode", false, "Decode a message from an image")
-	inputFile := flag.String("input", "", "Path to an input image file")
-	outputFile := flag.String("output", "", "Path to the output image file (required for encoding)")
+	inputFile := flag.String("inputFile", "", "Path to an input image file")
+	messageOutput := flag.String("messageOutput", "", "Path to the decoded message file")
+	outputFile := flag.String("outputFile", "", "Path to the output image file (this or output required for encoding)")
 	message := flag.String("message", "", "Message to encode (this or messageFile required for encoding)")
 	messageFile := flag.String("messageFile", "", "Message file to pull message from(this or message required for encoding)")
 
@@ -77,7 +78,25 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("Decoded message: ", message)
+
+		if *messageOutput == "" {
+			fmt.Println("Decoded message: ", message)
+		} else {
+			// output message contents in file
+			fh, err := os.Create(*messageOutput)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer fh.Close()
+
+			writer := bufio.NewWriter(fh)
+			n, err := writer.WriteString(message)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer writer.Flush()
+			log.Printf("Written %d bytes to disk.", n)
+		}
 	} else {
 		fmt.Println("Error: specify either -encode or -decode.")
 		os.Exit(1)

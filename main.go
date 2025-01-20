@@ -7,62 +7,64 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	_ "image/jpeg"
+	"image/jpeg"
 	"image/png"
-	_ "image/png"
+	"io"
 	"log"
 	"os"
+	"strings"
 )
 
 func main() {
 	// Define CLI flags
-	mode := flag.String("mode", "", "Mode: encode or decode")
-	inputFile := flag.String("inputFile", "", "Path to an input image file")
-	messageOutput := flag.String("messageOutput", "", "Path to the decoded message file")
-	outputFile := flag.String("outputFile", "", "Path to the output image file (this or output required for encoding)")
-	message := flag.String("message", "", "Message to encode (this or messageFile required for encoding)")
-	messageFile := flag.String("messageFile", "", "Message file to pull message from(this or message required for encoding)")
-	key := flag.String("key", "", "Encryption key (32 bytes for AES-256)")
+	mode := flag.String("mode", "", "Mode: encode | decode | capacity")
+	inputFile := flag.String("i", "", "Path to an input image file")
+	outputFile := flag.String("o", "", "Path to the output image file")
+	message := flag.String("m", "", "Message to encode (this or -mf required for encoding)")
+	messageFile := flag.String("mf", "", "Message file to pull message from(this or -m required for encoding)")
+	key := flag.String("k", "", "Encryption key (32 bytes for AES-256)")
+
+	flag.Usage = func() {
+		usage :=
+			`
+Usage:
+gosteg -mode "encode" -m "message" -i "input.png" -o "output.png"
+gosteg -mode "decode" -i "encoded.png"
+
+Flags:
+		 	`
+		fmt.Fprintln(flag.CommandLine.Output(), usage)
+		flag.PrintDefaults()
+	}
 
 	flag.Parse()
 
 	// Basic error validation
-	if *mode != "encode" && *mode != "decode" {
-		log.Fatal("Error: Invalid mode. use 'encode' or 'decode'.")
+	if *mode != "encode" && *mode != "decode" && *mode != "capacity" {
+		log.Fatal("Error: Invalid mode. use 'encode' | 'decode' | 'capacity'.")
 	}
 
 	if *key != "" && len(*key) != 32 {
 		log.Fatal("Encryption key must be exactly 32 bytes.")
 	}
 
-	if *mode == "encode" {
+	switch *mode {
+	case "encode":
 		if *inputFile == "" || *outputFile == "" {
-			log.Fatal("Error: 'encode' mode requires -input, -output.")
+			log.Fatal("Error: 'encode' mode requires -i, -o.")
 		}
 
 		if *message == "" && *messageFile == "" {
-			log.Fatal("Error: -message or -messageFile is required.")
+			log.Fatal("Error: -m or -mf is required.")
 		}
 
-		fmt.Println("encoding message...")
-		if *message != "" {
-			if *key != "" {
-				// Encrypt the message
-				encryptedMessage, err := EncryptMessage([]byte(*key), []byte(*message))
-				if err != nil {
-					log.Fatal(err)
-				}
+		log.Println("encoding message...")
 
-				err = encodeMessage(*inputFile, *outputFile, encryptedMessage)
-				if err != nil {
-					log.Fatal(err)
-				}
-			} else {
-				err := encodeMessage(*inputFile, *outputFile, *message)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
+		// Target message to encode(encrypted or decrypted)
+		var targetMessage string
+
+		if *message != "" {
+			targetMessage = *message
 		} else {
 			// dealing with message file
 			fh, err := os.Open(*messageFile)
@@ -71,85 +73,88 @@ func main() {
 			}
 			defer fh.Close()
 
-			var messageContent string
-			scanner := bufio.NewScanner(fh)
-			for scanner.Scan() {
-				messageContent += scanner.Text() + "\n"
+			fc, err := io.ReadAll(fh)
+			if err != nil {
+				log.Fatal(err)
 			}
-
-			if *key != "" {
-				// Encrypt the message
-				encryptedMessage, err := EncryptMessage([]byte(*key), []byte(messageContent))
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				if err = encodeMessage(*inputFile, *outputFile, encryptedMessage); err != nil {
-					log.Fatal(err)
-				}
-			} else {
-				if err = encodeMessage(*inputFile, *outputFile, messageContent); err != nil {
-					log.Fatal(err)
-				}
-			}
+			targetMessage = string(fc)
 		}
-	} else if *mode == "decode" {
+
+		if *key != "" {
+			// Encrypt the message
+			encryptedMessage, err := EncryptMessage([]byte(*key), []byte(targetMessage))
+			if err != nil {
+				log.Fatal(err)
+			}
+			targetMessage = encryptedMessage
+		}
+
+		err := encodeMessage(*inputFile, *outputFile, targetMessage)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	case "decode":
 		if *inputFile == "" {
-			fmt.Println("Error: 'decode' mode requires -input.")
+			log.Println("Error: 'decode' mode requires -i.")
 			os.Exit(1)
 		}
-		fmt.Println("decoding message...")
+		log.Println("decoding message...")
 		message, err := decodeMessage(*inputFile)
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		var finalMessage = message
 		if *key != "" {
 			// Decrypt the message
 			decodedMessage, err := DecryptMessage([]byte(*key), message)
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			if *messageOutput == "" {
-				fmt.Println("Decoded message: ", decodedMessage)
-			} else {
-				// output message contents in file
-				fh, err := os.Create(*messageOutput)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer fh.Close()
-
-				writer := bufio.NewWriter(fh)
-				n, err := writer.WriteString(decodedMessage)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer writer.Flush()
-				log.Printf("Written %d bytes to disk.", n)
-			}
-		} else {
-			if *messageOutput == "" {
-				fmt.Println("Decoded message: ", message)
-			} else {
-				// output message contents in file
-				fh, err := os.Create(*messageOutput)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer fh.Close()
-
-				writer := bufio.NewWriter(fh)
-				n, err := writer.WriteString(message)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer writer.Flush()
-				log.Printf("Written %d bytes to disk.", n)
-			}
+			finalMessage = decodedMessage
 		}
-	} else {
+
+		if *outputFile == "" {
+			log.Println("Decoded message: ", finalMessage)
+		} else {
+			// output message contents in file
+			fh, err := os.Create(*outputFile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer fh.Close()
+
+			writer := bufio.NewWriter(fh)
+			n, err := writer.WriteString(finalMessage)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer writer.Flush()
+			log.Printf("Written %d bytes to disk.", n)
+		}
+
+	case "capacity":
+		if *inputFile == "" {
+			log.Fatal("Error: 'capacity' mode requires -i.")
+		}
+
+		fh, err := os.Open(*inputFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer fh.Close()
+
+		img, _, err := image.Decode(fh)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		bounds := img.Bounds()
+		// -3 for the header
+		capacity := (bounds.Dx() * bounds.Dy() / 8) - 3 // 1 byte of encoding per 8 pixels(red channel)
+		fmt.Printf("This image can store upto %d bytes of data.\n", capacity)
+	default:
 		log.Fatal("Error: specify mode as either 'encode' or 'decode'.")
 	}
 }
@@ -215,9 +220,19 @@ func encodeMessage(inputPath, outputPath, message string) error {
 	}
 	defer outputFile.Close()
 
-	err = png.Encode(outputFile, outImage)
-	if err != nil {
-		return err
+	outputPathSplit := strings.Split(outputPath, ".")
+	outputImageFormat := outputPathSplit[len(outputPathSplit)-1]
+	switch outputImageFormat {
+	case "png":
+		if err = png.Encode(outputFile, outImage); err != nil {
+			return err
+		}
+	case "jpeg":
+		if err = jpeg.Encode(outputFile, outImage, nil); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("Error: unsupported file format: %s", outputImageFormat)
 	}
 
 	return nil

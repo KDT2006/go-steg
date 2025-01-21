@@ -26,10 +26,10 @@ func main() {
 
 	flag.Usage = func() {
 		usage :=
-			`
-Usage:
+			`Usage:
 gosteg -mode "encode" -m "message" -i "input.png" -o "output.png"
 gosteg -mode "decode" -i "encoded.png"
+gosteg -mode "capacity" -i "input.png"
 
 Flags:
 		 	`
@@ -191,7 +191,8 @@ func encodeMessage(inputPath, outputPath, message string) error {
 
 	// Check if message fits in the image
 	if len(binaryData) > width*height {
-		return fmt.Errorf("message is too large to fit in the image")
+		return fmt.Errorf("message is too large to fit in the image (requires %d bytes but only %d bytes available)",
+			len(binaryData)/8, width*height)
 	}
 
 	// Create a new image with the message encoded

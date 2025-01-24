@@ -49,7 +49,7 @@ func encodeMessage(inputPath, outputPath, message string) error {
 	// Create a new image with the message encoded
 	outImage := image.NewRGBA(bounds)
 	binaryIndex := 0
-	totalPixels := width * height
+	totalPixels := (width * height) + 2
 	progressInterval := totalPixels / 100 // Update progress every 1%
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -66,7 +66,7 @@ func encodeMessage(inputPath, outputPath, message string) error {
 			})
 
 			// Update progress for every pixel processed
-			pixelIndex := y*width + x + 1
+			pixelIndex := y*width + x + 1 // +1 for saving the new image
 			if pixelIndex%progressInterval == 0 || pixelIndex == totalPixels {
 				progress := (pixelIndex * 100) / totalPixels
 				fmt.Printf("\rEncoding progress: %d%%", progress)
@@ -89,7 +89,7 @@ func encodeMessage(inputPath, outputPath, message string) error {
 		if err = png.Encode(outputFile, outImage); err != nil {
 			return err
 		}
-	case "jpeg":
+	case "jpeg", "jpg":
 		if err = jpeg.Encode(outputFile, outImage, nil); err != nil {
 			return err
 		}

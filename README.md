@@ -25,3 +25,37 @@ Clone the repository and build the project:
 git clone https://github.com/KDT2006/go-steg.git
 cd go-steg
 go build -o gosteg
+```
+
+---
+
+## Usage
+
+## Encode a message
+```bash
+# Plain text message
+./gosteg -mode encode -i image.png -o encoded.png -m "Secret Message"
+
+# Message from file
+./gosteg -mode encode -i image.png -o encoded.png -mf secret.txt
+
+# Encrypted message
+./gosteg -mode encode -i image.png -o encoded.png -m "Secret" -k "encryption-key"
+```
+
+## Decode a message
+```bash
+# Simple decoding
+./gosteg -mode decode -i encoded.png
+
+# Decode to file
+./gosteg -mode decode -i encoded.png -o decoded.txt
+
+# Decrypt with key
+./gosteg -mode decode -i encoded.png -k "encryption-key"
+```
+
+---
+
+## License
+MIT License

@@ -1,4 +1,4 @@
-package main
+package steganography
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func encodeMessage(inputPath, outputPath, message string) error {
+func EncodeMessage(inputPath, outputPath, message string) error {
 	inputFile, err := os.Open(inputPath)
 	if err != nil {
 		return err
@@ -38,7 +38,7 @@ func encodeMessage(inputPath, outputPath, message string) error {
 	for _, bit := range lengthBinary {
 		binaryData = append(binaryData, byte(bit-'0'))
 	}
-	binaryData = append(binaryData, bytesToBinary(messageBytes)...)
+	binaryData = append(binaryData, BytesToBinary(messageBytes)...)
 
 	// Check if message fits in the image
 	if len(binaryData) > width*height {
@@ -100,7 +100,7 @@ func encodeMessage(inputPath, outputPath, message string) error {
 	return nil
 }
 
-func decodeMessage(imagePath string) (string, error) {
+func DecodeMessage(imagePath string) (string, error) {
 	fh, err := os.Open(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open image: %w", err)
@@ -148,7 +148,7 @@ func decodeMessage(imagePath string) (string, error) {
 
 	// Extract the message
 	binaryMessage := binaryData[32 : 32+(messageLength*8)]
-	decodedBytes, err := binaryToBytes(binaryMessage)
+	decodedBytes, err := BinaryToBytes(binaryMessage)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert binary to bytes: %s", err)
 	}

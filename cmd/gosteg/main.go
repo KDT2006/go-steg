@@ -2,13 +2,15 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"image"
 	"io"
 	"log"
 	"os"
+
+	crypto "github.com/KDT2006/go-steg/pkg/crypto"
+	steg "github.com/KDT2006/go-steg/pkg/steganography"
 )
 
 func main() {
@@ -78,14 +80,14 @@ Flags:
 
 		if *key != "" {
 			// Encrypt the message
-			encryptedMessage, err := EncryptMessage([]byte(*key), []byte(targetMessage))
+			encryptedMessage, err := crypto.EncryptMessage([]byte(*key), []byte(targetMessage))
 			if err != nil {
 				log.Fatal(err)
 			}
 			targetMessage = encryptedMessage
 		}
 
-		err := encodeMessage(*inputFile, *outputFile, targetMessage)
+		err := steg.EncodeMessage(*inputFile, *outputFile, targetMessage)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -96,7 +98,7 @@ Flags:
 			os.Exit(1)
 		}
 		fmt.Println("decoding message...")
-		message, err := decodeMessage(*inputFile)
+		message, err := steg.DecodeMessage(*inputFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -104,7 +106,7 @@ Flags:
 		var finalMessage = message
 		if *key != "" {
 			// Decrypt the message
-			decodedMessage, err := DecryptMessage([]byte(*key), message)
+			decodedMessage, err := crypto.EncryptMessage([]byte(*key), []byte(message))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -153,35 +155,4 @@ Flags:
 	default:
 		log.Fatal("Error: specify mode as either 'encode' or 'decode'.")
 	}
-}
-
-func bytesToBinary(data []byte) []byte {
-	binary := make([]byte, 0, len(data)*8) // Preallocate enough space for 8 bits per byte
-	for _, b := range data {
-		for i := 7; i >= 0; i-- { // Extract bits from most to least significant
-			binary = append(binary, (b>>i)&1)
-		}
-	}
-	return binary
-}
-
-func binaryToBytes(binaryData []byte) ([]byte, error) {
-	if len(binaryData)%8 != 0 {
-		return nil, fmt.Errorf("binary data length is not a multiple of 8")
-	}
-
-	var buffer bytes.Buffer
-	for i := 0; i < len(binaryData); i += 8 {
-		var b byte
-		for j := 0; j < 8; j++ {
-			b = (b << 1) | binaryData[i+j]
-		}
-		buffer.WriteByte(b)
-	}
-
-	return buffer.Bytes(), nil
-}
-
-func setLSB(value, bit byte) byte {
-	return (value & 0xFE) | bit
 }

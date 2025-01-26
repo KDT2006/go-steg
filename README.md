@@ -23,8 +23,8 @@ Clone the repository and build the project:
 
 ```bash
 git clone https://github.com/KDT2006/go-steg.git
-cd go-steg
-go build -o gosteg
+cd go-steg/cmd/gosteg
+go build
 ```
 
 ---

@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 
-	crypto "github.com/KDT2006/go-steg/pkg/crypto"
 	steg "github.com/KDT2006/go-steg/pkg/steganography"
 )
 
@@ -21,6 +20,7 @@ func main() {
 	message := flag.String("m", "", "Message to encode (this or -mf required for encoding)")
 	messageFile := flag.String("mf", "", "Message file to pull message from(this or -m required for encoding)")
 	key := flag.String("k", "", "Encryption key (32 bytes for AES-256)")
+	compress := flag.Bool("c", false, "Compress the message")
 
 	flag.Usage = func() {
 		usage :=
@@ -78,16 +78,7 @@ Flags:
 			targetMessage = string(fc)
 		}
 
-		if *key != "" {
-			// Encrypt the message
-			encryptedMessage, err := crypto.EncryptMessage([]byte(*key), []byte(targetMessage))
-			if err != nil {
-				log.Fatal(err)
-			}
-			targetMessage = encryptedMessage
-		}
-
-		err := steg.EncodeMessage(*inputFile, *outputFile, targetMessage)
+		err := steg.EncodeMessage(*inputFile, *outputFile, targetMessage, *key, *compress)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -98,23 +89,13 @@ Flags:
 			os.Exit(1)
 		}
 		fmt.Println("decoding message...")
-		message, err := steg.DecodeMessage(*inputFile)
+		message, err := steg.DecodeMessage(*inputFile, *key)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		var finalMessage = message
-		if *key != "" {
-			// Decrypt the message
-			decodedMessage, err := crypto.EncryptMessage([]byte(*key), []byte(message))
-			if err != nil {
-				log.Fatal(err)
-			}
-			finalMessage = decodedMessage
-		}
-
 		if *outputFile == "" {
-			fmt.Println("Decoded message: ", finalMessage)
+			fmt.Println("Decoded message: ", message)
 		} else {
 			// output message contents in file
 			fh, err := os.Create(*outputFile)
@@ -124,7 +105,7 @@ Flags:
 			defer fh.Close()
 
 			writer := bufio.NewWriter(fh)
-			n, err := writer.WriteString(finalMessage)
+			n, err := writer.WriteString(message)
 			if err != nil {
 				log.Fatal(err)
 			}

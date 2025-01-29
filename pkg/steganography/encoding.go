@@ -6,11 +6,14 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"log"
 	"os"
 	"strings"
+
+	"github.com/KDT2006/go-steg/pkg/crypto"
 )
 
-func EncodeMessage(inputPath, outputPath, message string) error {
+func EncodeMessage(inputPath, outputPath, message, key string, compress bool) error {
 	inputFile, err := os.Open(inputPath)
 	if err != nil {
 		return err
@@ -26,6 +29,26 @@ func EncodeMessage(inputPath, outputPath, message string) error {
 	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 
+	// Encrypt the message if requested
+	if key != "" {
+		message, err = crypto.EncryptMessage([]byte(key), []byte(message))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	// Compress message if requested
+	compressedFlag := byte(0)
+	if compress {
+		fmt.Println("compressing message...")
+		compressedMessage, err := CompressString(message)
+		if err != nil {
+			return err
+		}
+		message = string(compressedMessage)
+		compressedFlag = 1
+	}
+
 	// Convert message to binary
 	messageBytes := []byte(message)
 	messageLength := len(messageBytes)
@@ -33,8 +56,9 @@ func EncodeMessage(inputPath, outputPath, message string) error {
 	// Convert length to binary(32 bits)
 	lengthBinary := fmt.Sprintf("%032b", messageLength)
 
-	// Combine length and message binary
+	// Combine compressed flag, length and message binary
 	var binaryData []byte
+	binaryData = append(binaryData, compressedFlag)
 	for _, bit := range lengthBinary {
 		binaryData = append(binaryData, byte(bit-'0'))
 	}
@@ -100,7 +124,7 @@ func EncodeMessage(inputPath, outputPath, message string) error {
 	return nil
 }
 
-func DecodeMessage(imagePath string) (string, error) {
+func DecodeMessage(imagePath, key string) (string, error) {
 	fh, err := os.Open(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open image: %w", err)
@@ -135,6 +159,10 @@ func DecodeMessage(imagePath string) (string, error) {
 	}
 	fmt.Println()
 
+	// Read compression flag
+	compressedFlag := binaryData[0]
+	binaryData = binaryData[1:]
+
 	// Extract message length (first 32 bits)
 	if len(binaryData) < 32 {
 		return "", fmt.Errorf("image does not contain enough data")
@@ -152,6 +180,26 @@ func DecodeMessage(imagePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to convert binary to bytes: %s", err)
 	}
+	message := string(decodedBytes)
 
-	return string(decodedBytes), nil
+	// Decompress if the compression flag is set
+	if compressedFlag == 1 {
+		fmt.Println("decompressing message...")
+		decompressedMessage, err := DecompressString(decodedBytes)
+		if err != nil {
+			return "", fmt.Errorf("error decompressing message: %v", err)
+		}
+		message = decompressedMessage
+	}
+
+	// Decrypt if requested
+	if key != "" {
+		decodedMessage, err := crypto.DecryptMessage([]byte(key), message)
+		if err != nil {
+			log.Fatal(err)
+		}
+		message = decodedMessage
+	}
+
+	return message, nil
 }

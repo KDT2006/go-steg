@@ -1,8 +1,2 @@
-am.png
-amEncoded.png
-message.txt
-output.txt
-hello.txt
-large.png
-largeEncoded.png
 build/
+testdata

@@ -1,22 +1,25 @@
 package steganography
 
 import (
+	"io"
+	"log"
+	"os"
 	"testing"
-
-	"github.com/KDT2006/go-steg/pkg/crypto"
 )
+
+const ()
 
 func TestEncoding(t *testing.T) {
 	input := "../../testdata/am.png"
 	output := "../../testdata/amEncoded.png"
 	message := "Hello there, this is a test message"
 
-	err := EncodeMessage(input, output, message)
+	err := EncodeMessage(input, output, message, "", false)
 	if err != nil {
 		t.Errorf("EncodeMessage() error: %v", err)
 	}
 
-	decodedMessage, err := DecodeMessage(output)
+	decodedMessage, err := DecodeMessage(output, "")
 	if err != nil {
 		t.Errorf("DecodeMessage() error: %v", err)
 	}
@@ -26,21 +29,53 @@ func TestEncoding(t *testing.T) {
 	}
 }
 
-func TestCrypto(t *testing.T) {
+func TestEncodingWithEncryption(t *testing.T) {
+	input := "../../testdata/large.png"
+	output := "../../testdata/largeEncoded.png"
 	message := "Hello there, this is a test message"
-	key := "d3Q8fjQ9CQzosiIvHeQz3Lo0L09MkEXW"
+	key := "3GjmkamDG8k4JLxeCJ58KB0ne65wmJFl"
 
-	encrypted, err := crypto.EncryptMessage([]byte(key), []byte(message))
+	err := EncodeMessage(input, output, message, key, true)
 	if err != nil {
-		t.Errorf("EncryptMessage() error: %v", err)
+		t.Errorf("EncodeMessage() error: %v", err)
 	}
 
-	decrypted, err := crypto.DecryptMessage([]byte(key), encrypted)
+	decodedMessage, err := DecodeMessage(output, key)
 	if err != nil {
-		t.Errorf("DecryptMessage() error: %v", err)
+		t.Errorf("DecodeMessage() error: %v", err)
 	}
 
-	if decrypted != message {
-		t.Error("decrypted message does not match the original message")
+	if decodedMessage != message {
+		t.Error("decoded message does not match the original message")
+	}
+}
+
+func TestCompression(t *testing.T) {
+	messageFile := "../../testdata/compMessage.txt"
+	var message string
+	fh, err := os.Open(messageFile)
+	if err != nil {
+		t.Errorf("error opening message file: %v", err)
+	}
+	fc, err := io.ReadAll(fh)
+	if err != nil {
+		t.Errorf("error reading message from file: %v", err)
+	}
+	message = string(fc)
+	log.Printf("Original length: %d", len(message))
+
+	compressed, err := CompressString(message)
+	if err != nil {
+		t.Errorf("CompressString() error: %v", err)
+	}
+	log.Printf("Compressed length: %d", len(compressed))
+
+	decompressed, err := DecompressString(compressed)
+	if err != nil {
+		t.Errorf("DecompressString() error: %v", err)
+	}
+
+	if string(compressed) == decompressed || len(compressed) >= len(decompressed) {
+		t.Errorf("compression didn't work properly")
 	}
 }
